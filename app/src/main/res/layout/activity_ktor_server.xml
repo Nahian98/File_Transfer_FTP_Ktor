@@ -45,4 +45,13 @@
         app:layout_constraintTop_toBottomOf="@id/btnReceive"
         android:textSize="20sp"/>
 
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/ivQRCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvIp"
+        android:visibility="gone"/>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

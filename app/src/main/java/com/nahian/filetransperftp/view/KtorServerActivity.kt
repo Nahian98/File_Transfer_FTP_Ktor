@@ -7,28 +7,28 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanIntentResult
+import com.journeyapps.barcodescanner.ScanOptions
 import com.nahian.filetransperftp.databinding.ActivityKtorServerBinding
+import com.nahian.filetransperftp.utils.InternetUtil
+import com.nahian.filetransperftp.utils.QRUtil
 import com.nahian.filetransperftp.utils.UriHelpers
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.http.content.streamProvider
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.engine.applicationEngineEnvironment
-import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.engine.sslConnector
-import io.ktor.server.http.content.files
-import io.ktor.server.http.content.static
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.request.receiveMultipart
@@ -49,17 +49,14 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import okio.IOException
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.File
-import java.net.Inet4Address
-import java.net.NetworkInterface
-import java.security.KeyPairGenerator
-import java.security.KeyStore
-import java.security.Security
+import java.io.InputStream
+import java.io.OutputStream
 
 class KtorServerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityKtorServerBinding
     private lateinit var ipAddress: String
+    private lateinit var url: String
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityKtorServerBinding.inflate(layoutInflater)
@@ -70,9 +67,8 @@ class KtorServerActivity : AppCompatActivity() {
 
     private fun initListener() {
         binding.btnSend.setOnClickListener {
-//            binding.etUrl.visibility = View.VISIBLE
             // Scan qr code
-            openFileLauncher()
+            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
         }
 
         binding.btnReceive.setOnClickListener {
@@ -89,6 +85,23 @@ class KtorServerActivity : AppCompatActivity() {
         pickFileLauncher.launch(intent)
     }
 
+    private val scanQrResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { resultData ->
+        if (resultData.resultCode == RESULT_OK) {
+            val result = ScanIntentResult.parseActivityResult(resultData.resultCode, resultData.data)
+
+            // This will be QR activity result
+            if (result.contents == null) {
+                Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this, "Connected to the server" + result.contents, Toast.LENGTH_LONG).show()
+                url = result.contents
+                openFileLauncher()
+            }
+        }
+    }
+
     private val pickFileLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val data: Intent? = result.data
@@ -99,7 +112,6 @@ class KtorServerActivity : AppCompatActivity() {
 
                 if (selectedSongFile != null) {
                     lifecycleScope.launch {
-                        val url = binding.etUrl.text.toString()
                         val fullUrl = "http://$url:8080/upload"
                         sendFile(selectedSongFile, fullUrl)
                     }
@@ -144,21 +156,13 @@ class KtorServerActivity : AppCompatActivity() {
     }
 
     private fun showQrCode() {
-        ipAddress = getLocalIpAddress()!!
+        ipAddress = InternetUtil.getLocalIpAddress()!!
         binding.tvIp.text = ipAddress
-    }
-
-    private fun getLocalIpAddress(): String? {
-        try {
-            NetworkInterface.getNetworkInterfaces()?.toList()?.map { networkInterface ->
-                networkInterface.inetAddresses?.toList()?.find {
-                    !it.isLoopbackAddress && it is Inet4Address
-                }?.let { return it.hostAddress }
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Ip address exception: ${e.message}")
+        lifecycleScope.launch {
+            val qrCodeBitmap = QRUtil.generateQRCode(ipAddress)
+            binding.ivQRCode.setImageBitmap(qrCodeBitmap)
+            binding.ivQRCode.visibility = View.VISIBLE
         }
-        return null
     }
 
     private fun initComponent() {
@@ -171,10 +175,6 @@ class KtorServerActivity : AppCompatActivity() {
                 embeddedServer(Netty, port = 8080) {
                     install(CallLogging)
                     routing {
-                        static("/files") {
-                            files(Environment.getExternalStorageDirectory().toString())
-                        }
-
                         post("/upload") {
                             try {
                                 val multipart = call.receiveMultipart()
@@ -182,6 +182,7 @@ class KtorServerActivity : AppCompatActivity() {
                                 multipart.forEachPart { part ->
                                     if (part is PartData.FileItem) {
                                         val fileName = part.originalFileName ?: "unknown"
+                                        val contentLength = part.headers["Content-Length"]?.toLong() ?: 0L
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                             val contentValues = ContentValues().apply {
                                                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -192,19 +193,17 @@ class KtorServerActivity : AppCompatActivity() {
                                             uri?.let {
                                                 contentResolver.openOutputStream(it).use { outputStream ->
                                                     part.streamProvider().use { input ->
-                                                        input.copyTo(outputStream!!)
+                                                        uploadSuccess = copyStreamWithProgress(input, outputStream!!, contentLength)
                                                     }
                                                 }
-                                                uploadSuccess = true
                                             }
                                         } else {
                                             val file = File(Environment.getExternalStorageDirectory(), fileName)
                                             part.streamProvider().use { input ->
                                                 file.outputStream().buffered().use { output ->
-                                                    input.copyTo(output)
+                                                    uploadSuccess = copyStreamWithProgress(input, output, contentLength)
                                                 }
                                             }
-                                            uploadSuccess = true
                                         }
                                     }
                                     part.dispose()
@@ -242,6 +241,26 @@ class KtorServerActivity : AppCompatActivity() {
                 println("Ktor server started successfully")
             }.onFailure { exception ->
                 println("Failed to start Ktor server: ${exception.message}")
+            }
+        }
+    }
+
+    private suspend fun copyStreamWithProgress(input: InputStream, output: OutputStream, totalBytes: Long): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val buffer = ByteArray(1024)
+                var bytesRead: Int
+                var bytesCopied: Long = 0
+                while (input.read(buffer).also { bytesRead = it } >= 0) {
+                    output.write(buffer, 0, bytesRead)
+                    bytesCopied += bytesRead
+                    Log.d(TAG, "Upload progress: ${(bytesCopied * 100) / totalBytes}%")
+                }
+                output.flush()
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
             }
         }
     }

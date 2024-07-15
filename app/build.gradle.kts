@@ -69,4 +69,6 @@ dependencies {
     implementation(libs.ktor.network.tls.certificates)
     implementation (libs.bcpkix.jdk18on)
     implementation (libs.bcprov.jdk18on)
+    implementation (libs.core)
+    implementation (libs.zxing.android.embedded)
 }
