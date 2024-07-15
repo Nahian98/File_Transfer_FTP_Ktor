@@ -63,4 +63,10 @@ dependencies {
     implementation (libs.ktor.server.sessions)
     implementation (libs.ktor.server.content.negotiation)
     implementation (libs.ktor.serialization.kotlinx.json)
+    implementation (libs.zxing.android.embedded)
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
+    implementation(libs.ktor.network.tls.certificates)
+    implementation (libs.bcpkix.jdk18on)
+    implementation (libs.bcprov.jdk18on)
 }

@@ -49,23 +49,9 @@ class MainActivity : AppCompatActivity() {
         binding.uploadImageToFtpServer.isEnabled = false
         binding.uploadSongToFtpServer.isEnabled = false
         ftpManager = FTPManager()
-        val ipAddress = getLocalIpAddress()
-        Log.d(TAG, "Device ip address: $ipAddress")
-        Toast.makeText(this@MainActivity, "Device ip: $ipAddress", Toast.LENGTH_SHORT).show()
     }
 
-    private fun getLocalIpAddress(): String? {
-        try {
-            NetworkInterface.getNetworkInterfaces()?.toList()?.map { networkInterface ->
-                networkInterface.inetAddresses?.toList()?.find {
-                    !it.isLoopbackAddress && it is Inet4Address
-                }?.let { return it.hostAddress }
-            }
-        } catch (e: Exception) {
-            Log.d(TAG, "Ip address exception: ${e.message}")
-        }
-        return null
-    }
+
 
     private fun initListener() {
         binding.connectFtpServer.setOnClickListener {
