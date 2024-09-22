@@ -21,7 +21,6 @@ import com.nahian.filetransperftp.databinding.ActivityKtorServerBinding
 import com.nahian.filetransperftp.utils.InternetUtil
 import com.nahian.filetransperftp.utils.QRUtil
 import com.nahian.filetransperftp.utils.UriHelpers
-import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
@@ -38,7 +37,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -49,11 +47,16 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import okio.IOException
+import org.http4k.client.OkHttp
+import org.http4k.core.Uri
+import org.http4k.core.extend
+import org.http4k.routing.reverseProxy
+import org.http4k.server.asServer
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 
-class KtorServerActivity : AppCompatActivity() {
+class KtorHttpServerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityKtorServerBinding
     private lateinit var ipAddress: String
     private lateinit var url: String
@@ -63,18 +66,6 @@ class KtorServerActivity : AppCompatActivity() {
         setContentView(binding.root)
         initComponent()
         initListener()
-    }
-
-    private fun initListener() {
-        binding.btnSend.setOnClickListener {
-            // Scan qr code
-            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
-        }
-
-        binding.btnReceive.setOnClickListener {
-            startKtorServer()
-            showQrCode()
-        }
     }
 
     private fun openFileLauncher() {
@@ -106,9 +97,11 @@ class KtorServerActivity : AppCompatActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             val data: Intent? = result.data
             if (data != null) {
-                val selectedSongFile = data.data?.let {
-                    UriHelpers.getFileForUri(this, it)
-                }
+//                val selectedSongFile = data.data?.let {
+//                    UriHelpers.getFileForUri(this, it)
+//                }
+
+                val selectedSongFile = data.data?.let { UriHelpers.copyUriToFile(this@KtorHttpServerActivity, it) }
 
                 if (selectedSongFile != null) {
                     lifecycleScope.launch {
@@ -138,16 +131,16 @@ class KtorServerActivity : AppCompatActivity() {
                 override fun onFailure(call: Call, e: IOException) {
                     e.printStackTrace()
                     runOnUiThread {
-                        Toast.makeText(this@KtorServerActivity, "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@KtorHttpServerActivity, "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
                     runOnUiThread {
                         if (response.isSuccessful) {
-                            Toast.makeText(this@KtorServerActivity, "File uploaded successfully", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@KtorHttpServerActivity, "File uploaded successfully", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(this@KtorServerActivity, "Upload failed: ${response.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@KtorHttpServerActivity, "Upload failed: ${response.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -156,7 +149,6 @@ class KtorServerActivity : AppCompatActivity() {
     }
 
     private fun showQrCode() {
-        ipAddress = InternetUtil.getLocalIpAddress()!!
         binding.tvIp.text = ipAddress
         lifecycleScope.launch {
             val qrCodeBitmap = QRUtil.generateQRCode(ipAddress)
@@ -166,11 +158,15 @@ class KtorServerActivity : AppCompatActivity() {
     }
 
     private fun initComponent() {
-//        startKtorServer()
+        ipAddress = InternetUtil.getLocalIpAddress()!!
+        lifecycleScope.launch {
+            startHttp4kReverseProxy()
+            startKtorServer()
+        }
     }
 
-    private fun startKtorServer() {
-        GlobalScope.launch(Dispatchers.IO) {
+    private suspend fun startKtorServer() {
+        withContext(Dispatchers.IO) {
             val result = runCatching {
                 embeddedServer(Netty, port = 8080) {
                     install(CallLogging)
@@ -241,6 +237,52 @@ class KtorServerActivity : AppCompatActivity() {
                 println("Ktor server started successfully")
             }.onFailure { exception ->
                 println("Failed to start Ktor server: ${exception.message}")
+            }
+        }
+    }
+
+    private suspend fun startHttp4kReverseProxy() {
+        withContext(Dispatchers.IO) {
+            val client = OkHttp()
+
+            // Configure upstream URI (the Ktor server)
+            val upstreamUri = Uri.of("http://${ipAddress}:8080")
+
+            // Set up reverse proxy to forward requests to Ktor
+            val proxyApp: (request: org.http4k.core.Request) -> org.http4k.core.Response = reverseProxy("" to { req ->
+                client(req.uri(upstreamUri.extend(req.uri))) // Extend request to forward to upstream
+            })
+
+            // Start Http4k server on port 8443 (HTTPS)
+            proxyApp.asServer(org.http4k.server.Netty(8443)).start()
+        }
+
+    }
+
+    private fun initListener() {
+        binding.btnSend.setOnClickListener {
+            // Scan qr code
+            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
+        }
+
+        binding.btnReceive.setOnClickListener {
+            lifecycleScope.launch {
+                startKtorServer()
+            }
+            showQrCode()
+        }
+    }
+
+    private suspend fun handleIncomingFile(data: ByteArray) {
+        // Handle the incoming binary data
+        withContext(Dispatchers.IO) {
+            try {
+                val file = File(Environment.getExternalStorageDirectory(), "received_file")
+                file.outputStream().use { it.write(data) }
+                println("File received successfully")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                println("Failed to save file: ${e.message}")
             }
         }
     }

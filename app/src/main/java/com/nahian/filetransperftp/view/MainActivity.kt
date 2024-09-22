@@ -14,13 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.nahian.filetransperftp.databinding.ActivityMainBinding
 import com.nahian.filetransperftp.manager.FTPManager
 import com.nahian.filetransperftp.utils.UriHelpers
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.util.Enumeration
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -87,7 +81,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.KtorServerBtn.setOnClickListener {
-            val intent = Intent(this, KtorServerActivity::class.java)
+            val intent = Intent(this, KtorHttpServerActivity::class.java)
             startActivity(intent)
         }
     }
@@ -166,6 +160,3 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
     }
 }
-
-//192.168.68.104
-//192.168.68.120

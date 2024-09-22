@@ -40,6 +40,10 @@ android {
 
     packaging {
         resources {
+            excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+            excludes.add("META-INF/*.kotlin_module")
+            excludes.add("META-INF/*.pro")
+            excludes.add("META-INF/*.version")
             excludes.add("META-INF/*")
         }
     }
@@ -64,11 +68,18 @@ dependencies {
     implementation (libs.ktor.server.content.negotiation)
     implementation (libs.ktor.serialization.kotlinx.json)
     implementation (libs.zxing.android.embedded)
-    implementation(libs.okhttp)
-    implementation(libs.logging.interceptor)
-    implementation(libs.ktor.network.tls.certificates)
+    implementation (libs.okhttp)
+    implementation (libs.logging.interceptor)
+    implementation (libs.ktor.network.tls.certificates)
     implementation (libs.bcpkix.jdk18on)
     implementation (libs.bcprov.jdk18on)
     implementation (libs.core)
     implementation (libs.zxing.android.embedded)
+    implementation (libs.ktor.server.websockets)
+
+    implementation(platform(libs.http4k.bom))
+    implementation(libs.http4k.core)
+    implementation (libs.http4k.client.okhttp)
+    implementation (libs.http4k.server.netty)
+//    implementation(libs.okhttp)
 }
