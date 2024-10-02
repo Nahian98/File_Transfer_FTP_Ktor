@@ -84,6 +84,16 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, KtorHttpServerActivity::class.java)
             startActivity(intent)
         }
+
+        binding.KtorTestServerBtn.setOnClickListener {
+            val intent = Intent(this, TestActivity::class.java)
+            startActivity(intent)
+        }
+
+        binding.NanoHttpdServerBtn.setOnClickListener {
+            val intent = Intent(this, NanoHttpdActivity::class.java)
+            startActivity(intent)
+        }
     }
 
     private val pickImageLauncher : ActivityResultLauncher<Intent> = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

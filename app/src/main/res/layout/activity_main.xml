@@ -49,4 +49,24 @@
         app:layout_constraintTop_toBottomOf="@id/upload_song_to_ftp_server"
         />
 
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/KtorTestServerBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Go to Test Ktor Server"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/KtorServerBtn"
+        />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/NanoHttpdServerBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Go to NanoHttpd Server"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/KtorTestServerBtn"
+        />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

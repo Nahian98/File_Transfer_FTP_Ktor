@@ -31,9 +31,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.request.receiveMultipart
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
-import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
@@ -47,11 +45,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import okio.IOException
-import org.http4k.client.OkHttp
-import org.http4k.core.Uri
-import org.http4k.core.extend
-import org.http4k.routing.reverseProxy
-import org.http4k.server.asServer
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -97,16 +90,11 @@ class KtorHttpServerActivity : AppCompatActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             val data: Intent? = result.data
             if (data != null) {
-//                val selectedSongFile = data.data?.let {
-//                    UriHelpers.getFileForUri(this, it)
-//                }
-
                 val selectedSongFile = data.data?.let { UriHelpers.copyUriToFile(this@KtorHttpServerActivity, it) }
 
                 if (selectedSongFile != null) {
                     lifecycleScope.launch {
-                        val fullUrl = "http://$url:8080/upload"
-                        sendFile(selectedSongFile, fullUrl)
+                        sendFile(selectedSongFile, url)
                     }
                 }
             }
@@ -151,7 +139,8 @@ class KtorHttpServerActivity : AppCompatActivity() {
     private fun showQrCode() {
         binding.tvIp.text = ipAddress
         lifecycleScope.launch {
-            val qrCodeBitmap = QRUtil.generateQRCode(ipAddress)
+            val fullUrl = "http://$ipAddress:8080/upload"
+            val qrCodeBitmap = QRUtil.generateQRCode(fullUrl)
             binding.ivQRCode.setImageBitmap(qrCodeBitmap)
             binding.ivQRCode.visibility = View.VISIBLE
         }
@@ -160,7 +149,6 @@ class KtorHttpServerActivity : AppCompatActivity() {
     private fun initComponent() {
         ipAddress = InternetUtil.getLocalIpAddress()!!
         lifecycleScope.launch {
-            startHttp4kReverseProxy()
             startKtorServer()
         }
     }
@@ -179,6 +167,7 @@ class KtorHttpServerActivity : AppCompatActivity() {
                                     if (part is PartData.FileItem) {
                                         val fileName = part.originalFileName ?: "unknown"
                                         val contentLength = part.headers["Content-Length"]?.toLong() ?: 0L
+                                        Log.d(TAG, "Received file name: $fileName")
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                             val contentValues = ContentValues().apply {
                                                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -187,9 +176,19 @@ class KtorHttpServerActivity : AppCompatActivity() {
                                             }
                                             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
                                             uri?.let {
-                                                contentResolver.openOutputStream(it).use { outputStream ->
-                                                    part.streamProvider().use { input ->
-                                                        uploadSuccess = copyStreamWithProgress(input, outputStream!!, contentLength)
+                                                // Test for postman, content length always zero in postman
+                                                if (contentLength == 0L) {
+                                                    contentResolver.openOutputStream(it).use { outputStream ->
+                                                        part.streamProvider().use { input ->
+                                                            input.copyTo(outputStream!!)
+                                                        }
+                                                    }
+                                                    uploadSuccess = true
+                                                } else {
+                                                    contentResolver.openOutputStream(it).use { outputStream ->
+                                                        part.streamProvider().use { input ->
+                                                            uploadSuccess = copyStreamWithProgress(input, outputStream!!, contentLength)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -197,7 +196,13 @@ class KtorHttpServerActivity : AppCompatActivity() {
                                             val file = File(Environment.getExternalStorageDirectory(), fileName)
                                             part.streamProvider().use { input ->
                                                 file.outputStream().buffered().use { output ->
-                                                    uploadSuccess = copyStreamWithProgress(input, output, contentLength)
+                                                    // Test for postman, content length always zero in postman
+                                                    if (contentLength == 0L) {
+                                                        input.copyTo(output)
+                                                        uploadSuccess = true
+                                                    } else {
+                                                        uploadSuccess = copyStreamWithProgress(input, output, contentLength)
+                                                    }
                                                 }
                                             }
                                         }
@@ -214,21 +219,6 @@ class KtorHttpServerActivity : AppCompatActivity() {
                                 call.respondText("File upload error: ${e.message}", status = HttpStatusCode.InternalServerError)
                             }
                         }
-
-                        get("/list-files") {
-                            val directory = File(Environment.getExternalStorageDirectory().toString())
-                            if (directory.exists() && directory.isDirectory) {
-                                val files = directory.listFiles()
-                                if (files != null) {
-                                    val fileNames = files.map { it.name }
-                                    call.respond(fileNames)
-                                } else {
-                                    call.respondText("No files found", status = HttpStatusCode.NotFound)
-                                }
-                            } else {
-                                call.respondText("Directory not found", status = HttpStatusCode.NotFound)
-                            }
-                        }
                     }
                 }.start(wait = true)
             }
@@ -239,24 +229,6 @@ class KtorHttpServerActivity : AppCompatActivity() {
                 println("Failed to start Ktor server: ${exception.message}")
             }
         }
-    }
-
-    private suspend fun startHttp4kReverseProxy() {
-        withContext(Dispatchers.IO) {
-            val client = OkHttp()
-
-            // Configure upstream URI (the Ktor server)
-            val upstreamUri = Uri.of("http://${ipAddress}:8080")
-
-            // Set up reverse proxy to forward requests to Ktor
-            val proxyApp: (request: org.http4k.core.Request) -> org.http4k.core.Response = reverseProxy("" to { req ->
-                client(req.uri(upstreamUri.extend(req.uri))) // Extend request to forward to upstream
-            })
-
-            // Start Http4k server on port 8443 (HTTPS)
-            proxyApp.asServer(org.http4k.server.Netty(8443)).start()
-        }
-
     }
 
     private fun initListener() {
@@ -270,20 +242,6 @@ class KtorHttpServerActivity : AppCompatActivity() {
                 startKtorServer()
             }
             showQrCode()
-        }
-    }
-
-    private suspend fun handleIncomingFile(data: ByteArray) {
-        // Handle the incoming binary data
-        withContext(Dispatchers.IO) {
-            try {
-                val file = File(Environment.getExternalStorageDirectory(), "received_file")
-                file.outputStream().use { it.write(data) }
-                println("File received successfully")
-            } catch (e: Exception) {
-                e.printStackTrace()
-                println("Failed to save file: ${e.message}")
-            }
         }
     }
 
@@ -311,3 +269,42 @@ class KtorHttpServerActivity : AppCompatActivity() {
         private const val TAG = "KtorServerActivity"
     }
 }
+
+
+//                embeddedServer(Netty, port = 8080) {
+//                    install(ContentNegotiation) {
+////                        gson {
+////                            setPrettyPrinting()
+////                        }
+//                    }
+//                    routing {
+//                        post("/upload") {
+//                            Log.d(TAG, "Upload init")
+//                            val multipart = call.receiveMultipart()
+//                            Log.d(TAG, "Multipart: $multipart")
+//                            var fileName = ""
+//
+//                            multipart.forEachPart { part ->
+//                                when (part) {
+//                                    is PartData.FileItem -> {
+//                                        // Extract the file name and stream the file to a directory
+//                                        fileName = part.originalFileName as String
+//                                        val fileBytes = part.streamProvider().readBytes()
+//                                        val file = File("uploads/$fileName")
+//                                        file.writeBytes(fileBytes)
+//                                        println("Received file: $fileName")
+//                                    }
+//                                    is PartData.FormItem -> {
+//                                        // You can handle additional form data here if needed
+//                                        println("Form field: ${part.value}")
+//                                    }
+//                                    else -> {}
+//                                }
+//                                part.dispose()
+//                            }
+//
+//                            // Respond after successfully saving the file
+//                            call.respondText("File uploaded successfully: $fileName", status = HttpStatusCode.OK)
+//                        }
+//                    }
+//                }.start(wait = true)

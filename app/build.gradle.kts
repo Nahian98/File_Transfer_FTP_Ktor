@@ -81,5 +81,6 @@ dependencies {
     implementation(libs.http4k.core)
     implementation (libs.http4k.client.okhttp)
     implementation (libs.http4k.server.netty)
+    implementation(libs.nanohttpd)
 //    implementation(libs.okhttp)
 }
