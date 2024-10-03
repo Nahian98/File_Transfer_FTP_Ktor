@@ -99,15 +99,13 @@ class APManager private constructor(context: Context) {
                 onFailureListener.onFailure(ERROR_LOCATION_PERMISSION_DENIED, null)
             }
         } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (!utils.checkLocationPermission(context)) {
-                    onFailureListener.onFailure(ERROR_LOCATION_PERMISSION_DENIED, null)
-                    return
-                }
-                if (!utils.checkWriteSettingPermission(context)) {
-                    onFailureListener.onFailure(ERROR_WRITE_SETTINGS_PERMISSION_REQUIRED, null)
-                    return
-                }
+            if (!utils.checkLocationPermission(context)) {
+                onFailureListener.onFailure(ERROR_LOCATION_PERMISSION_DENIED, null)
+                return
+            }
+            if (!utils.checkWriteSettingPermission(context)) {
+                onFailureListener.onFailure(ERROR_WRITE_SETTINGS_PERMISSION_REQUIRED, null)
+                return
             }
             try {
                 sSID = "AndroidAP_" + Random().nextInt(10000)
@@ -209,14 +207,12 @@ class APManager private constructor(context: Context) {
             )
         }
 
-        @RequiresApi(Build.VERSION_CODES.M)
         fun askWriteSettingPermission(activity: Activity) {
             val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS)
             intent.setData(Uri.parse("package:" + activity.packageName))
             activity.startActivity(intent)
         }
 
-        @RequiresApi(Build.VERSION_CODES.M)
         fun checkWriteSettingPermission(context: Context): Boolean {
             return Settings.System.canWrite(context)
         }
