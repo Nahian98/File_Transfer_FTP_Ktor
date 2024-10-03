@@ -69,4 +69,23 @@
         app:layout_constraintTop_toBottomOf="@id/KtorTestServerBtn"
         />
 
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/wifiHotspotBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Generate hotspot qr code"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/NanoHttpdServerBtn"
+        />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/ivHotspotQRCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/wifiHotspotBtn"
+        android:visibility="gone"/>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

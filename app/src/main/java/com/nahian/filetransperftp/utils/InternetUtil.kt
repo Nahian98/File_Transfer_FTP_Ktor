@@ -5,7 +5,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 
 object InternetUtil {
-    private val TAG = "InternetUtil"
+    private const val TAG = "InternetUtil"
     fun getLocalIpAddress(): String? {
         try {
             NetworkInterface.getNetworkInterfaces()?.toList()?.map { networkInterface ->
