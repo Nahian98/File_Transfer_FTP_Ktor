@@ -7,13 +7,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import com.nahian.filetransperftp.utils.InternetUtil
 import fi.iki.elonen.NanoHTTPD
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.Response
 import java.io.File
 import java.io.IOException
 
@@ -22,10 +17,16 @@ class NanoHttpServer(private val activity: Activity, port: Int) : NanoHTTPD(port
         val uri = session.uri
         Log.d(TAG, "Session uri: $uri")
         return try {
-            if (Method.POST == session.method && session.uri == "/upload") {
-                postUpload(session)
-            } else {
-                newFixedLengthResponse(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "Only POST method is allowed")
+            when {
+                session.method == Method.GET && session.uri == "/exchange-ip" -> {
+                    handleIpExchange(session)
+                }
+                session.method == Method.POST && session.uri == "/upload" -> {
+                    postUpload(session)
+                }
+                else -> {
+                    newFixedLengthResponse(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "Only POST and GET methods are allowed")
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -33,6 +34,27 @@ class NanoHttpServer(private val activity: Activity, port: Int) : NanoHTTPD(port
         }
     }
 
+    // Handle IP exchange for the GET /exchange-ip endpoint
+    private fun handleIpExchange(session: IHTTPSession): Response {
+        val clientIp = session.remoteIpAddress
+        val serverIp = getServerIpAddress() // Custom method to get server IP (or hardcode)
+
+        Log.d(TAG, "Client IP: $clientIp, Server IP: $serverIp")
+
+        val ipResponseJson = """
+            {
+                "client_ip": "$clientIp",
+                "server_ip": "$serverIp"
+            }
+        """.trimIndent()
+
+        return newFixedLengthResponse(Response.Status.OK, "application/json", ipResponseJson)
+    }
+
+
+    private fun getServerIpAddress(): String? {
+        return InternetUtil.getLocalIpAddress() // Replace with actual method to get IP address dynamically
+    }
 
     private fun postUpload(session: IHTTPSession): Response {
         println("Received HTTP POST with upload body...")

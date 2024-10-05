@@ -2,9 +2,17 @@ package com.nahian.filetransperftp.view
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiConfiguration
+import android.net.wifi.WifiManager
+import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -18,6 +26,9 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.WriterException
 import com.google.zxing.common.BitMatrix
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanIntentResult
+import com.journeyapps.barcodescanner.ScanOptions
 import com.nahian.filetransperftp.databinding.ActivityMainBinding
 import com.nahian.filetransperftp.manager.APManager
 import com.nahian.filetransperftp.manager.APManager.Companion.ERROR_DISABLE_HOTSPOT
@@ -47,6 +58,39 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.ACCESS_FINE_LOCATION
         )
     }
+
+    private val scanQrResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { resultData ->
+        if (resultData.resultCode == RESULT_OK) {
+            val result = ScanIntentResult.parseActivityResult(resultData.resultCode, resultData.data)
+
+            // This will be QR activity result
+            if (result.contents == null) {
+                Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show()
+            } else {
+                val qrContent = result.contents
+                Log.d(TAG, "Scanned QR Content: $qrContent")
+
+                // Parse SSID and Password using regular expressions
+                val wifiRegex = """WIFI:S:(.*?);T:.*?;P:(.*?);;""".toRegex()
+                val matchResult = wifiRegex.find(qrContent)
+
+                if (matchResult != null) {
+                    val ssid = matchResult.groupValues[1]
+                    val password = matchResult.groupValues[2]
+
+                    Toast.makeText(this, "SSID: $ssid\nPassword: $password", Toast.LENGTH_LONG).show()
+                    Log.d(TAG, "SSID: $ssid, Password: $password")
+
+                    // Now you can use the SSID and password to connect to the hotspot
+                    connectToHotspot(ssid, password)
+                } else {
+                    Toast.makeText(this, "Invalid QR Code format", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -62,7 +106,69 @@ class MainActivity : AppCompatActivity() {
         ftpManager = FTPManager()
     }
 
+    private fun connectToHotspot(ssid: String, password: String, encryptionType: Int? = null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
+                .setSsid(ssid)
+                .setWpa2Passphrase(password)
+                .build()
 
+            val networkRequest = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .setNetworkSpecifier(wifiNetworkSpecifier)
+                .build()
+
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.requestNetwork(networkRequest, object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.d(TAG, "Connected to Wi-Fi: $ssid")
+                }
+
+                override fun onUnavailable() {
+                    Log.d(TAG, "Failed to connect to Wi-Fi: $ssid")
+                }
+            })
+        } else {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+            val wifiConfig = WifiConfiguration().apply {
+                SSID = String.format("\"%s\"", ssid)
+                preSharedKey = String.format("\"%s\"", password)
+//                when (encryptionType) {
+//                    Barcode.WiFi.TYPE_WPA -> {
+//
+//                    }
+//                    Barcode.WiFi.TYPE_WEP -> {
+//                        wepKeys[0] = String.format("\"%s\"", password)
+//                        wepTxKeyIndex = 0
+//                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+//                        allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40)
+//                    }
+//                    Barcode.WiFi.TYPE_OPEN -> {
+//                        allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+//                    }
+//                    else -> {
+//                        Log.e(TAG, "Unsupported encryption type")
+//                        return
+//                    }
+//                }
+            }
+
+            // Disconnect from any current Wi-Fi network
+            wifiManager.disconnect()
+
+            // Add the new configuration to the list of configured networks
+            val netId = wifiManager.addNetwork(wifiConfig)
+            if (netId != -1) {
+                // Enable the network
+                wifiManager.enableNetwork(netId, true)
+                wifiManager.reconnect()
+                Log.d(TAG, "Connected to SSID: $ssid")
+            } else {
+                Log.e(TAG, "Failed to connect to SSID: $ssid")
+            }
+        }
+    }
 
     private fun initListener() {
         binding.connectFtpServer.setOnClickListener {
@@ -114,6 +220,11 @@ class MainActivity : AppCompatActivity() {
 
         binding.wifiHotspotBtn.setOnClickListener {
             enableHotspot()
+        }
+
+        binding.btnScanQRCode.setOnClickListener {
+            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
+//            scanQRCode(binding.ivHotspotQRCode.drawable.toBitmap())
         }
     }
 
