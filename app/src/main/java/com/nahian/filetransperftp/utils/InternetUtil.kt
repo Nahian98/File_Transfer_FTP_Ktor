@@ -28,6 +28,10 @@ object InternetUtil {
         return null
     }
 
+    fun encodeIpToBase64(ipAddress: String): String {
+        return Base64.encodeToString(ipAddress.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+    }
+
     fun encryptData(apiKey: String, keyAlias: String): Pair<String, String> {
         val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         keyGenerator.init(
