@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity() {
         ftpManager = FTPManager()
     }
 
-    private fun connectToHotspot(ssid: String, password: String, encryptionType: Int? = null) {
+    private fun connectToHotspot(ssid: String, password: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
                 .setSsid(ssid)

@@ -15,7 +15,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -58,10 +57,10 @@ class APManager private constructor(context: Context) {
     ) {
         val providerEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
 
-        if (isDeviceConnectedToWifi) {
-            onFailureListener.onFailure(ERROR_DISABLE_WIFI, null)
-            return
-        }
+//        if (isDeviceConnectedToWifi) {
+//            onFailureListener.onFailure(ERROR_DISABLE_WIFI, null)
+//            return
+//        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (utils.checkLocationPermission(context) && providerEnabled && !isWifiApEnabled) {
