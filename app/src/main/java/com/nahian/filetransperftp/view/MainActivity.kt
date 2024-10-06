@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -13,6 +15,12 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
+import android.net.wifi.p2p.WifiP2pConfig
+import android.net.wifi.p2p.WifiP2pManager
+import android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION
+import android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION
+import android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION
+import android.net.wifi.p2p.WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -21,6 +29,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
@@ -38,12 +47,24 @@ import com.nahian.filetransperftp.manager.APManager.Companion.ERROR_LOCATION_PER
 import com.nahian.filetransperftp.manager.APManager.Companion.ERROR_UNKNOWN
 import com.nahian.filetransperftp.manager.APManager.Companion.ERROR_WRITE_SETTINGS_PERMISSION_REQUIRED
 import com.nahian.filetransperftp.manager.FTPManager
+import com.nahian.filetransperftp.receiver.WiFiDirectReceiver
+import com.nahian.filetransperftp.utils.InternetUtil
 import com.nahian.filetransperftp.utils.UriHelpers
 import kotlinx.coroutines.launch
+import java.math.BigInteger
+import java.security.MessageDigest
+import java.security.NoSuchAlgorithmException
+import java.util.Random
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var ftpManager: FTPManager
+    private lateinit var manager: WifiP2pManager
+    private lateinit var channel: WifiP2pManager.Channel
+    private lateinit var receiver: WiFiDirectReceiver
+    private lateinit var intentFilter: IntentFilter
+    var isWifiP2pEnabled = false
+    private var ipAddress: String? = null
     private val requestedPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         arrayOf(
             Manifest.permission.READ_MEDIA_AUDIO,
@@ -104,6 +125,8 @@ class MainActivity : AppCompatActivity() {
         binding.uploadImageToFtpServer.isEnabled = false
         binding.uploadSongToFtpServer.isEnabled = false
         ftpManager = FTPManager()
+        setupWifiDirect()
+        ipAddress = InternetUtil.getLocalIpAddress()
     }
 
     private fun connectToHotspot(ssid: String, password: String) {
@@ -219,12 +242,88 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.wifiHotspotBtn.setOnClickListener {
-            enableHotspot()
+            createHotspot()
         }
 
         binding.btnScanQRCode.setOnClickListener {
             scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
 //            scanQRCode(binding.ivHotspotQRCode.drawable.toBitmap())
+        }
+    }
+
+    private fun setupWifiDirect() {
+        manager = getSystemService(WIFI_P2P_SERVICE) as WifiP2pManager
+        channel = manager.initialize(this, mainLooper, null)
+        receiver = WiFiDirectReceiver(manager, channel, this)
+        // Intent Filter for Wi-Fi Direct actions
+        intentFilter = IntentFilter().apply {
+            addAction(WIFI_P2P_STATE_CHANGED_ACTION)
+            addAction(WIFI_P2P_PEERS_CHANGED_ACTION)
+            addAction(WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
+
+        // Ensure Wi-Fi Direct is enabled
+        if (!isWifiP2pEnabled) {
+            Log.e("P2P ACTIVITY", "error: cannot start hotspot. WifiP2p is not enabled")
+            return
+        }
+    }
+
+    private fun createHotspot() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val encodedIp = ipAddress?.let { InternetUtil.encodeIpToBase64(it) }
+            val ssid = "DIRECT-ff-$encodedIp"
+            val randomPassword: String = try {
+                val ms = MessageDigest.getInstance("MD5")
+                val bytes = ByteArray(10)
+                Random().nextBytes(bytes)
+                val digest = ms.digest(bytes)
+                val bigInteger = BigInteger(1, digest)
+                bigInteger.toString(16).substring(0, 10)
+            } catch (e: NoSuchAlgorithmException) {
+                e.printStackTrace()
+                "jfs82433#$2"
+            }
+
+
+            val band = WifiP2pConfig.GROUP_OWNER_BAND_AUTO
+
+            val config = WifiP2pConfig.Builder()
+                .setNetworkName(ssid)
+                .setPassphrase(randomPassword)
+                .enablePersistentMode(false)
+                .setGroupOperatingBand(band)
+                .build()
+
+            // Create a Wi-Fi Direct group
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED || ActivityCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.NEARBY_WIFI_DEVICES
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+
+            manager.createGroup(channel, config, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Log.d("P2P ACTIVITY", "Hotspot created successfully with SSID: $ssid")
+
+                    // Generate QR Code and display it
+                    val qrCodeBitmap = generateQRCode(ssid, randomPassword)
+                    binding.ivHotspotQRCode.setImageBitmap(qrCodeBitmap)
+                    binding.ivHotspotQRCode.visibility = View.VISIBLE
+                }
+
+                override fun onFailure(reason: Int) {
+                    Log.e("P2P ACTIVITY", "Failed to start hotspot. Reason: $reason")
+                }
+            })
+        } else {
+            enableHotspot()
         }
     }
 
@@ -360,6 +459,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPermissionDenied() {
         Toast.makeText(this@MainActivity,"Lack of permissions, please grant permissions first", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        registerReceiver(receiver, intentFilter)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(receiver)
     }
 
     companion object {
