@@ -12,7 +12,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-
 object InternetUtil {
     private const val TAG = "InternetUtil"
     fun getLocalIpAddress(): String? {
