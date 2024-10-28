@@ -98,4 +98,15 @@
         app:layout_constraintTop_toBottomOf="@id/btnScanQRCode"
         android:visibility="gone"/>
 
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/RawHttpServer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Go to Raw Http Server"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/ivHotspotQRCode"
+        />
+
+
 </androidx.constraintlayout.widget.ConstraintLayout>

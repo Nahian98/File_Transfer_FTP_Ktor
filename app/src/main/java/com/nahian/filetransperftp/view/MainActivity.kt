@@ -243,11 +243,17 @@ class MainActivity : AppCompatActivity() {
 
         binding.wifiHotspotBtn.setOnClickListener {
             createHotspot()
+//            enableHotspot()
         }
 
         binding.btnScanQRCode.setOnClickListener {
             scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
 //            scanQRCode(binding.ivHotspotQRCode.drawable.toBitmap())
+        }
+
+        binding.RawHttpServer.setOnClickListener {
+            val intent = Intent(this, RawServerActivity::class.java)
+            startActivity(intent)
         }
     }
 

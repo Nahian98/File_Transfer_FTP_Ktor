@@ -10,9 +10,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanIntentResult
-import com.journeyapps.barcodescanner.ScanOptions
 import com.nahian.filetransperftp.databinding.ActivityNanoHttpdBinding
 import com.nahian.filetransperftp.server.NanoHttpServer
 import com.nahian.filetransperftp.utils.InternetUtil
@@ -28,14 +26,18 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
+import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
 class NanoHttpdActivity : AppCompatActivity() {
     private lateinit var server: NanoHttpServer
     private lateinit var binding: ActivityNanoHttpdBinding
     private lateinit var ipAddress: String
-    private lateinit var url: String
+//    private lateinit var url: String
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityNanoHttpdBinding.inflate(layoutInflater)
@@ -58,10 +60,61 @@ class NanoHttpdActivity : AppCompatActivity() {
     private fun initListener() {
         binding.btnSend.setOnClickListener {
             // Scan qr code
-            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
+//            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
+            lifecycleScope.launch {
+                val url = "http://192.168.68.126:8080/exchange-ip"
+                sendGetRequest(url)
+            }
+
         }
         binding.btnReceive.setOnClickListener {
             showQrCode()
+        }
+    }
+
+    private suspend fun sendGetRequest(url: String) {
+        withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+
+            try {
+                // Create a URL object from the URL string
+                val urlObj = URL(url)
+
+                // Open connection to the URL
+                connection = urlObj.openConnection() as HttpURLConnection
+
+                // Set request method to GET
+                connection.requestMethod = "GET"
+
+                // Set a timeout for the connection
+                connection.connectTimeout = 5000 // 5 seconds
+                connection.readTimeout = 5000 // 5 seconds
+
+                // Check if the response code is successful (200)
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    // Read the response
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                    val response = StringBuilder()
+                    var line: String?
+
+                    while (reader.readLine().also { line = it } != null) {
+                        response.append(line)
+                    }
+                    reader.close()
+
+                    // Print the response
+                    println("Response: ${response.toString()}")
+                } else {
+                    println("Request failed: $responseCode")
+                }
+            } catch (e: Exception) {
+                // Handle exceptions (e.g., network failure)
+                e.printStackTrace()
+            } finally {
+                // Ensure the connection is closed
+                connection?.disconnect()
+            }
         }
     }
 
@@ -101,7 +154,7 @@ class NanoHttpdActivity : AppCompatActivity() {
                 Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show()
             } else {
                 Toast.makeText(this, "Connected to the server" + result.contents, Toast.LENGTH_LONG).show()
-                url = result.contents
+//                url = result.contents
                 openFileLauncher()
             }
         }
@@ -116,7 +169,7 @@ class NanoHttpdActivity : AppCompatActivity() {
 
                 if (selectedSongFile != null) {
                     lifecycleScope.launch {
-                        sendFile(selectedSongFile, url)
+//                        sendFile(selectedSongFile, url)
                     }
                 }
             }
