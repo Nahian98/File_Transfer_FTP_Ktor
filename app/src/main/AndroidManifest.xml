@@ -37,6 +37,9 @@
         android:theme="@style/Theme.FileTransperFTP"
         tools:targetApi="31">
         <activity
+            android:name=".view.WebSocketServerActivity"
+            android:exported="false" />
+        <activity
             android:name=".view.RawServerActivity"
             android:exported="false" />
         <activity

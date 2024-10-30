@@ -10,9 +10,12 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanIntentResult
+import com.journeyapps.barcodescanner.ScanOptions
 import com.nahian.filetransperftp.databinding.ActivityNanoHttpdBinding
 import com.nahian.filetransperftp.server.NanoHttpServer
+import com.nahian.filetransperftp.utils.CountingRequestBody
 import com.nahian.filetransperftp.utils.InternetUtil
 import com.nahian.filetransperftp.utils.QRUtil
 import com.nahian.filetransperftp.utils.UriHelpers
@@ -24,7 +27,6 @@ import okhttp3.Callback
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import java.io.BufferedReader
 import java.io.File
@@ -37,7 +39,7 @@ class NanoHttpdActivity : AppCompatActivity() {
     private lateinit var server: NanoHttpServer
     private lateinit var binding: ActivityNanoHttpdBinding
     private lateinit var ipAddress: String
-//    private lateinit var url: String
+    private lateinit var url: String
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityNanoHttpdBinding.inflate(layoutInflater)
@@ -60,11 +62,11 @@ class NanoHttpdActivity : AppCompatActivity() {
     private fun initListener() {
         binding.btnSend.setOnClickListener {
             // Scan qr code
-//            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
-            lifecycleScope.launch {
-                val url = "http://192.168.68.126:8080/exchange-ip"
-                sendGetRequest(url)
-            }
+            scanQrResultLauncher.launch(ScanContract().createIntent(this, ScanOptions()))
+//            lifecycleScope.launch {
+//                val url = "http://192.168.68.126:8080/exchange-ip"
+//                sendGetRequest(url)
+//            }
 
         }
         binding.btnReceive.setOnClickListener {
@@ -169,24 +171,34 @@ class NanoHttpdActivity : AppCompatActivity() {
 
                 if (selectedSongFile != null) {
                     lifecycleScope.launch {
-//                        sendFile(selectedSongFile, url)
+                        sendFile(selectedSongFile, url)
                     }
                 }
             }
         }
     }
 
+    // Step 2: Modify sendFile function to track progress
     private suspend fun sendFile(file: File, url: String) {
         withContext(Dispatchers.IO) {
             val client = OkHttpClient()
-            val requestBody = MultipartBody.Builder()
+
+            val requestBody = CountingRequestBody(
+                file,
+                "application/octet-stream"
+            ) { bytesWritten, contentLength ->
+                val progress = (100 * bytesWritten / contentLength).toInt()
+                Log.d(TAG, "File sending progress: $progress")
+            }
+
+            val multipartBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", file.name, file.asRequestBody())
+                .addFormDataPart("file", file.name, requestBody)
                 .build()
 
             val request = Request.Builder()
                 .url(url)
-                .post(requestBody)
+                .post(multipartBody)
                 .build()
 
             client.newCall(request).enqueue(object : Callback {

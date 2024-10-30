@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.nahian.filetransperftp"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.nahian.filetransperftp"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -84,5 +84,6 @@ dependencies {
     implementation (libs.http4k.client.okhttp)
     implementation (libs.http4k.server.netty)
     implementation(libs.nanohttpd)
+    implementation (libs.java.websocket.java.websocket)
 //    implementation(libs.okhttp)
 }

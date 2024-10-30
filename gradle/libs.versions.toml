@@ -4,7 +4,8 @@ bcpkixJdk18on = "1.78.1"
 commonsNetVersion = "3.6"
 core = "3.4.1"
 http4kBom = "5.30.0.0"
-kotlin = "1.9.0"
+javaWebsocketVersion = "1.5.2"
+kotlin = "2.0.20"
 coreKtx = "1.13.1"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -14,7 +15,7 @@ ktorServerCore = "2.3.12"
 ktorServerWebsockets = "2.3.1"
 loggingInterceptor = "4.12.0"
 material = "1.12.0"
-activity = "1.9.2"
+activity = "1.9.3"
 constraintlayout = "2.1.4"
 nanohttpd = "2.3.0"
 okhttp = "4.12.0"
@@ -32,6 +33,7 @@ http4k-bom = { module = "org.http4k:http4k-bom", version.ref = "http4kBom" }
 http4k-client-okhttp = { module = "org.http4k:http4k-client-okhttp" }
 http4k-core = { module = "org.http4k:http4k-core" }
 http4k-server-netty = { module = "org.http4k:http4k-server-netty" }
+java-websocket-java-websocket = { module = "org.java-websocket:Java-WebSocket", version.ref = "javaWebsocketVersion" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

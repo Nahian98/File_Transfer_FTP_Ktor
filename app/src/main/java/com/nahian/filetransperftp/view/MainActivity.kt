@@ -252,7 +252,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.RawHttpServer.setOnClickListener {
-            val intent = Intent(this, RawServerActivity::class.java)
+            val intent = Intent(this, WebSocketServerActivity::class.java)
             startActivity(intent)
         }
     }
